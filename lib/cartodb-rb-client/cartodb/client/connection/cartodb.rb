@@ -15,42 +15,56 @@ module CartoDB
 
         def create_table(table_name = nil, schema_or_file = nil, the_geom_type = 'Point')
 
-          case schema_or_file
-          when Array
-            schema = schema_or_file if schema_or_file && schema_or_file.is_a?(Array)
-            params = {:name => table_name}
-            params[:schema] = schema.map{|s| "#{s[:name]} #{s[:type]}"}.join(', ') if schema
+          params = {:name => table_name}
+          params[:the_geom_type] = the_geom_type.downcase if the_geom_type.present?
 
-            request = cartodb_request 'tables', :post, :params => params, :the_geom_type => the_geom_type do |response|
+          case schema_or_file
+
+          when String
+
+            params[:the_geom_type] = schema_or_file.downcase
+
+            request = cartodb_request 'tables', :post, :params => params do |response|
               return Utils.parse_json(response)
             end
 
-            execute_queue
+          when Array
 
-            request.handled_response
+            schema = schema_or_file if schema_or_file && schema_or_file.is_a?(Array)
+            params[:schema] = schema.map{|s| "#{s[:name]} #{s[:type]}"}.join(', ') if schema
+
+            request = cartodb_request 'tables', :post, :params => params do |response|
+              return Utils.parse_json(response)
+            end
+
           when File
+
             file = schema_or_file if schema_or_file && schema_or_file.is_a?(File)
 
             request = cartodb_request nil, :post, :url => '/upload', :params => {:file => file}, :multipart => true do |response|
               upload_response = Utils.parse_json(response)
 
               params = {:name => table_name}
-              params[:url] = generate_url upload_response[:file_uri]
+              params[:url]           = generate_url upload_response[:file_uri]
+              params[:the_geom_type] = the_geom_type.downcase if the_geom_type.present?
 
-              request = cartodb_request 'tables', :post, :params => params, :the_geom_type => the_geom_type do |response|
+              request = cartodb_request 'tables', :post, :params => params do |response|
                 return Utils.parse_json(response)
               end
 
-              execute_queue
-
-              request.handled_response
             end
 
-            execute_queue
+          else
 
-            request.handled_response
+            request = cartodb_request 'tables', :post, :params => params do |response|
+              return Utils.parse_json(response)
+            end
 
           end
+
+          execute_queue
+
+          request.handled_response
 
         end
 
@@ -125,11 +139,8 @@ module CartoDB
           results = query(<<-SQL
             INSERT INTO #{table_name}
             (#{row.keys.join(',')})
-            VALUES (#{row.values.join(',')});
-
-            SELECT #{table_name}.cartodb_id as id, #{table_name}.*
-            FROM #{table_name}
-            WHERE cartodb_id = currval('public.#{table_name}_cartodb_id_seq');
+            VALUES (#{row.values.join(',')})
+            RETURNING cartodb_id as id, *;
           SQL
           )
 
@@ -143,10 +154,8 @@ module CartoDB
             UPDATE #{table_name}
             SET (#{row.keys.join(',')})
             = (#{row.values.join(',')})
-            WHERE cartodb_id = #{row_id};
-            SELECT #{table_name}.cartodb_id as id, #{table_name}.*
-            FROM #{table_name}
-            WHERE cartodb_id = currval('public.#{table_name}_cartodb_id_seq');
+            WHERE cartodb_id = #{row_id}
+            RETURNING cartodb_id as id, *;
           SQL
           )
 

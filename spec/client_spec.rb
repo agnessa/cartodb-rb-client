@@ -87,6 +87,48 @@ describe 'CartoDB client' do
     end
   end
 
+  it "should create a table with POINT type geometry" do
+    table = CartoDB::Connection.create_table 'cartodb_spec', 'point'
+
+    table.should_not be_nil
+    table = CartoDB::Connection.table 'cartodb_spec'
+    table.schema.should have(6).items
+    table.schema.should include(["cartodb_id", "number"])
+    table.schema.should include(["created_at", "date"])
+    table.schema.should include(["updated_at", "date"])
+    table.schema.should include(["name", "string"])
+    table.schema.should include(["description", "string"])
+    table.schema.should include(["the_geom", "geometry", "geometry", "point"])
+  end
+
+  it "should create a table with MULTIPOLYGON type geometry" do
+    table = CartoDB::Connection.create_table 'cartodb_spec', 'multipolygon'
+
+    table.should_not be_nil
+    table = CartoDB::Connection.table 'cartodb_spec'
+    table.schema.should have(6).items
+    table.schema.should include(["cartodb_id", "number"])
+    table.schema.should include(["created_at", "date"])
+    table.schema.should include(["updated_at", "date"])
+    table.schema.should include(["name", "string"])
+    table.schema.should include(["description", "string"])
+    table.schema.should include(["the_geom", "geometry", "geometry", "multipolygon"])
+  end
+
+  it "should create a table with MULTILINESTRING type geometry" do
+    table = CartoDB::Connection.create_table 'cartodb_spec', 'multilinestring'
+
+    table.should_not be_nil
+    table = CartoDB::Connection.table 'cartodb_spec'
+    table.schema.should have(6).items
+    table.schema.should include(["cartodb_id", "number"])
+    table.schema.should include(["created_at", "date"])
+    table.schema.should include(["updated_at", "date"])
+    table.schema.should include(["name", "string"])
+    table.schema.should include(["description", "string"])
+    table.schema.should include(["the_geom", "geometry", "geometry", "multilinestring"])
+  end
+
   it "should add and remove colums in a previously created table" do
     CartoDB::Connection.create_table 'cartodb_spec'
     CartoDB::Connection.add_column 'cartodb_spec', 'field1', 'text'
@@ -146,18 +188,17 @@ describe 'CartoDB client' do
 
     today = DateTime.now
 
-    inserted_row = CartoDB::Connection.insert_row 'table_1', {
+    record = CartoDB::Connection.insert_row 'table_1', {
       'field1'      => 'lorem',
       'field2'      => 100.99,
       'field3'      => today,
       'field4'      => true
     }
 
-    record = CartoDB::Connection.row 'table_1', inserted_row.id
-    record.field1.should == 'lorem'
-    record.field2.should == 100.99
+    record.field1.should         == 'lorem'
+    record.field2.should         == 100.99
     record.field3.to_date.should == today.to_date
-    record.field4.should == true
+    record.field4.should         == true
   end
 
   it "should update a row in a table" do
@@ -177,14 +218,12 @@ describe 'CartoDB client' do
       'field4'      => true
     }
 
-    CartoDB::Connection.update_row 'table_1', record.id, {
+    record = CartoDB::Connection.update_row 'table_1', record.id, {
       'field1'      => 'illum',
       'field2'      => -83.24,
       'field3'      => today + 1,
       'field4'      => false
     }
-
-    record = CartoDB::Connection.row 'table_1', record.id
 
     record.field1.should      == 'illum'
     record.field2.should      == -83.24
@@ -284,6 +323,18 @@ describe 'CartoDB client' do
     records.rows.first.cartodb_id.should be == 21
     records.rows.last.cartodb_id.should be == 40
 
+  end
+
+  it 'should escape properly input data in insert queries' do
+
+    table = CartoDB::Connection.create_table 'table #1', 'multipolygon'
+    table.schema.should include(["the_geom", "geometry", "geometry", "multipolygon"])
+
+    record = CartoDB::Connection.insert_row 'table_1', {
+      'the_geom' => "ST_GeomFromText('MULTIPOLYGON(((95.67764648436992 59.894444919406,90.75577148436992 54.16886220825434,103.41202148436992 56.75874227547269,95.67764648436992 59.894444919406)))', 4326)"
+    }
+
+    record.id.should_not be_nil
   end
 
 end
